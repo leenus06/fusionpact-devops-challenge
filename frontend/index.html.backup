@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fusionpact DevOps Gauntlet 2026</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .hero {
+            text-align: center;
+            padding: 4rem 0;
+        }
+        .status-card {
+            background: rgba(255,255,255,0.1);
+            padding: 2rem;
+            border-radius: 15px;
+            margin: 2rem 0;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .endpoints {
+            text-align: left;
+            background: rgba(255,255,255,0.05);
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid #4CAF50;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            margin: 0.25rem;
+        }
+        .status-success {
+            color: #4CAF50;
+        }
+        .status-error {
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>Fusionpact DevOps Gauntlet 2026</h1>
+            <p>Production Deployment - Cloud Ready</p>
+            
+            <div class="status-card">
+                <h3>Application Status: <span class="status-success">Operational</span></h3>
+                <div>
+                    <span class="badge">Frontend: Nginx</span>
+                    <span class="badge">Backend: FastAPI</span>
+                    <span class="badge">Cloud: AWS EC2</span>
+                    <span class="badge">Orchestration: Docker</span>
+                </div>
+            </div>
+
+            <div class="endpoints">
+                <h4>Available Endpoints:</h4>
+                <ul>
+                    <li><strong>Frontend:</strong> <span id="frontend-url">Loading...</span></li>
+                    <li><strong>Backend API:</strong> <span id="backend-url">Loading...</span></li>
+                    <li><strong>Health Check:</strong> <span id="health-url">Loading...</span></li>
+                    <li><strong>Metrics:</strong> <span id="metrics-url">Loading...</span></li>
+                </ul>
+            </div>
+
+            <div class="status-card">
+                <h4>Backend Connection Test:</h4>
+                <p id="backend-data">Testing connection to backend API...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get public IP and update URLs
+        async function updateURLs() {
+            try {
+                const response = await fetch('http://169.254.169.254/latest/meta-data/public-ipv4');
+                const publicIp = await response.text();
+                
+                document.getElementById('frontend-url').textContent = 'http://' + publicIp;
+                document.getElementById('backend-url').textContent = 'http://' + publicIp + ':8000';
+                document.getElementById('health-url').textContent = 'http://' + publicIp + ':8000/health';
+                document.getElementById('metrics-url').textContent = 'http://' + publicIp + ':8000/metrics';
+            } catch (error) {
+                console.log('Using localhost for URLs');
+                document.getElementById('frontend-url').textContent = 'http://localhost';
+                document.getElementById('backend-url').textContent = 'http://localhost:8000';
+                document.getElementById('health-url').textContent = 'http://localhost:8000/health';
+                document.getElementById('metrics-url').textContent = 'http://localhost:8000/metrics';
+            }
+        }
+
+        // Test backend connection
+        async function testBackend() {
+            try {
+                const response = await fetch('http://localhost:8000/api/data');
+                const data = await response.json();
+                document.getElementById('backend-data').innerHTML = 
+                    '<span class="status-success">Backend Connected Successfully</span><br>' +
+                    '<strong>Response:</strong> ' + JSON.stringify(data);
+            } catch (error) {
+                document.getElementById('backend-data').innerHTML = 
+                    '<span class="status-error">Backend Connection Failed</span><br>' +
+                    '<strong>Error:</strong> ' + error.message;
+            }
+        }
+
+        // Initialize
+        updateURLs();
+        testBackend();
+    </script>
+</body>
+</html>
