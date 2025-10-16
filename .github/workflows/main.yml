@@ -1,45 +1,19 @@
-name: CI/CD Pipeline - Build, Test & Deploy
+name: CI/CD Pipeline - Deploy to EC2
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  build-and-test:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-    
-    - name: Build Docker images
-      run: |
-        echo "Building Docker images..."
-        docker-compose -f docker-compose.yml build
-        echo "✅ Docker images built successfully"
-        
-    - name: Test Services
-      run: |
-        echo "Starting services for testing..."
-        docker-compose -f docker-compose.yml up -d
-        sleep 10
-        echo "Testing backend API..."
-        curl -f http://localhost:8000/api/data || exit 1
-        echo "✅ Backend API test passed"
-        docker-compose down
-
   security-scan:
     runs-on: ubuntu-latest
-    needs: build-and-test
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
     
     - name: Security Check
       run: |
-        echo "🔒 Running security scan..."
+        echo "🔒 Checking for exposed credentials..."
         if grep -r "AKIA" . --include="*.yml" --include="*.yaml" --include="*.py"; then
           echo "❌ SECURITY ISSUE: AWS keys found in code"
           exit 1
@@ -47,9 +21,9 @@ jobs:
           echo "✅ No exposed AWS credentials found"
         fi
 
-  deploy-to-ec2:
+  deploy:
     runs-on: ubuntu-latest
-    needs: [build-and-test, security-scan]
+    needs: security-scan
     env:
       EC2_HOST: ${{ secrets.EC2_HOST }}
       EC2_USER: ${{ secrets.EC2_USER }}
@@ -66,33 +40,56 @@ jobs:
     
     - name: Deploy to EC2
       run: |
-        echo "🚀 Deploying to EC2..."
+        echo "🚀 Starting deployment to EC2..."
         ssh -i ~/.ssh/id_rsa $EC2_USER@$EC2_HOST "
           cd fusionpact-devops-challenge
-          echo 'Stopping existing services...'
-          docker-compose down || true
-          echo 'Starting services...'
-          docker-compose up -d
-          sleep 20
-          echo 'Testing deployment...'
-          curl -f http://localhost/api/data && echo '✅ Backend API working'
-          curl -f http://localhost:8000/metrics && echo '✅ Metrics endpoint working'
-          curl -f http://localhost:80 && echo '✅ Frontend working'
+          echo '1. Stopping existing services...'
+          sudo docker-compose down
+          echo '2. Pulling latest code...'
+          git pull origin main
+          echo '3. Rebuilding and starting services...'
+          sudo docker-compose up -d --build
+          echo '4. Waiting for services to start...'
+          sleep 30
+          echo '5. Testing all endpoints...'
+          curl -f http://localhost/api/data && echo '✅ Backend API test passed'
+          curl -f http://localhost:8000/metrics && echo '✅ Metrics test passed' 
+          curl -f http://localhost:80 && echo '✅ Frontend test passed'
           echo '🎉 Deployment completed successfully!'
         "
+        echo "✅ Deployment finished!"
 
   health-check:
     runs-on: ubuntu-latest
-    needs: deploy-to-ec2
+    needs: deploy
     steps:
-    - name: Final Health Check
+    - name: Verify Deployment
       run: |
-        echo "🏥 Running final health checks..."
-        EC2_HOST="${{ secrets.EC2_HOST }}"
+        echo "🏥 Verifying deployment health..."
+        EC2_HOST='13.235.61.229'
+        
         echo "1. Testing Frontend: http://$EC2_HOST"
-        curl -f "http://$EC2_HOST" && echo "✅ Frontend is healthy!"
-        echo "2. Testing Backend: http://$EC2_HOST/api/data"
-        curl -f "http://$EC2_HOST/api/data" && echo "✅ Backend API is healthy!"
-        echo "3. Testing Metrics: http://$EC2_HOST/api/metrics" 
-        curl -f "http://$EC2_HOST/api/metrics" && echo "✅ Metrics endpoint is healthy!"
-        echo "🎉 All health checks passed!"
+        if curl -s -f "http://$EC2_HOST" > /dev/null; then
+          echo "✅ Frontend is accessible"
+        else
+          echo "❌ Frontend check failed"
+          exit 1
+        fi
+        
+        echo "2. Testing Backend API: http://$EC2_HOST/api/data"
+        if curl -s -f "http://$EC2_HOST/api/data" > /dev/null; then
+          echo "✅ Backend API is working"
+        else
+          echo "❌ Backend API check failed"
+          exit 1
+        fi
+        
+        echo "3. Testing Metrics: http://$EC2_HOST/api/metrics"
+        if curl -s -f "http://$EC2_HOST/api/metrics" > /dev/null; then
+          echo "✅ Metrics endpoint is working"
+        else
+          echo "❌ Metrics check failed"
+          exit 1
+        fi
+        
+        echo "🎉 All services are healthy and running!"
