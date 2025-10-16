@@ -41,7 +41,8 @@ jobs:
       run: |
         echo "🔒 Running comprehensive security scan..."
         
-        # Check for AWS credentials
+        # Check for AWS credentials (CRITICAL)
+        echo "1. Checking for exposed AWS credentials..."
         if grep -r "AKIA" . --include="*.yml" --include="*.yaml" --include="*.py"; then
           echo "❌ CRITICAL: Exposed AWS credentials found"
           exit 1
@@ -49,15 +50,27 @@ jobs:
           echo "✅ No AWS credentials exposed"
         fi
         
-        # Check for passwords
-        if grep -r "password" . --include="*.yml" --include="*.yaml" --include="*.py" -i; then
-          echo "⚠️  Warning: Potential passwords found (review manually)"
+        # Check for actual secrets (not just the word "password")
+        echo "2. Checking for potential secrets..."
+        if grep -r "password=" . --include="*.yml" --include="*.yaml" --include="*.py" || \
+           grep -r "secret=" . --include="*.yml" --include="*.yaml" --include="*.py" || \
+           grep -r "key=" . --include="*.yml" --include="*.yaml" --include="*.py" | grep -v "AWS_ACCESS_KEY_ID"; then
+          echo "⚠️  Warning: Potential secrets found (review manually)"
+          # Don't exit 1 for warnings, only for critical issues
         else
-          echo "✅ No obvious passwords found"
+          echo "✅ No obvious secrets found"
         fi
         
-        # Validate docker-compose security
-        echo "✅ Security scan passed"
+        # Check file permissions and structure
+        echo "3. Validating file structure..."
+        if [ -f ".env" ]; then
+          echo "❌ CRITICAL: .env file should not be committed"
+          exit 1
+        else
+          echo "✅ No .env file committed"
+        fi
+        
+        echo "🎉 Security scan passed successfully!"
 
   deploy-to-ec2:
     runs-on: ubuntu-latest
@@ -144,10 +157,6 @@ jobs:
           echo "   ❌ Metrics endpoint health check failed"
           exit 1
         fi
-        
-        echo "4. 🔍 Monitoring Services Health Check..."
-        echo "   Prometheus: http://$EC2_HOST:9090"
-        echo "   Grafana: http://$EC2_HOST:3000"
         
         echo "🎊 ALL HEALTH CHECKS PASSED! ✅"
         echo "✨ Application is fully operational and production-ready!"
